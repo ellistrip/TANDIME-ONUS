@@ -1,7 +1,22 @@
+cd "$HOME/Desktop/TANDIME-ONUS" || exit 1
+
+set -e
+
+STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+
+cp index.html \
+  "index.html.before-remove-duplicate-document-$STAMP"
+
+cat > index.html <<'HTML'
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
 
   <meta
     name="description"
@@ -18,14 +33,6 @@
 
 <body>
   <main class="onus">
-    <!-- ==================================================
-         ONUS EYE
-
-         The image contains only:
-         - the ONUS station artwork
-         - the detected live-stream panels
-         ================================================== -->
-
     <section
       class="eye-stage"
       aria-label="TANDIME-ONUS live mosaic eye"
@@ -42,10 +49,6 @@
         aria-label="Detected live-stream panels"
       ></div>
     </section>
-
-    <!-- ==================================================
-         INTERFACE BELOW THE EYE
-         ================================================== -->
 
     <section class="outside-interface">
       <header class="outside-header">
@@ -151,60 +154,34 @@
 
         <dl>
           <div>
-            <dt>
-              ID
-            </dt>
-
-            <dd id="inspectId">
-              —
-            </dd>
+            <dt>ID</dt>
+            <dd id="inspectId">—</dd>
           </div>
 
           <div>
-            <dt>
-              GROUP
-            </dt>
-
-            <dd id="inspectGroup">
-              —
-            </dd>
+            <dt>GROUP</dt>
+            <dd id="inspectGroup">—</dd>
           </div>
 
           <div>
-            <dt>
-              REGION
-            </dt>
-
-            <dd id="inspectRegion">
-              —
-            </dd>
+            <dt>REGION</dt>
+            <dd id="inspectRegion">—</dd>
           </div>
 
           <div>
-            <dt>
-              POSITION
-            </dt>
-
-            <dd id="inspectPosition">
-              —
-            </dd>
+            <dt>POSITION</dt>
+            <dd id="inspectPosition">—</dd>
           </div>
 
           <div>
-            <dt>
-              GEOMETRY
-            </dt>
-
+            <dt>GEOMETRY</dt>
             <dd id="inspectRotation">
               FOUR-CORNER PERSPECTIVE
             </dd>
           </div>
 
           <div>
-            <dt>
-              STREAM
-            </dt>
-
+            <dt>STREAM</dt>
             <dd id="inspectStream">
               EMPTY
             </dd>
@@ -252,41 +229,15 @@
           class="transport-law"
           aria-label="TANDIME transport route"
         >
-          <span>
-            A PRESENT LIVE
-          </span>
-
-          <b aria-hidden="true">
-            →
-          </b>
-
-          <span>
-            MAZE
-          </span>
-
-          <b aria-hidden="true">
-            →
-          </b>
-
-          <span>
-            WEB11
-          </span>
-
-          <b aria-hidden="true">
-            →
-          </b>
-
-          <span>
-            EXIT 11
-          </span>
-
-          <b aria-hidden="true">
-            →
-          </b>
-
-          <span>
-            TANDIME-ONUS
-          </span>
+          <span>A PRESENT LIVE</span>
+          <b aria-hidden="true">→</b>
+          <span>MAZE</span>
+          <b aria-hidden="true">→</b>
+          <span>WEB11</span>
+          <b aria-hidden="true">→</b>
+          <span>EXIT 11</span>
+          <b aria-hidden="true">→</b>
+          <span>TANDIME-ONUS</span>
         </div>
       </section>
 
@@ -309,3 +260,24 @@
   <script src="./app.js"></script>
 </body>
 </html>
+HTML
+
+echo
+echo "===== VERIFY ONE DOCUMENT ONLY ====="
+
+grep -c '<!doctype html>' index.html
+grep -c '<html' index.html
+grep -c '</html>' index.html
+grep -c 'id="screenMap"' index.html
+grep -c 'class="outside-interface"' index.html
+
+echo
+echo "===== FILE REFERENCES ====="
+
+grep -nE \
+'styles\.css|onus-station\.png|config\.js|eye-map\.js|app\.js' \
+index.html
+
+echo
+echo "===== GIT DIFF ====="
+git diff -- index.html
