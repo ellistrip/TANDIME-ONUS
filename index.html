@@ -8,6 +8,11 @@
     content="width=device-width, initial-scale=1"
   >
 
+  <meta
+    name="description"
+    content="TANDIME-ONUS is the external destination connected to TANDIME Cloud Exit 11."
+  >
+
   <title>TANDIME-ONUS</title>
 
   <link
@@ -19,43 +24,269 @@
 <body>
   <main class="onus-shell">
     <header class="onus-header">
-      <p>TANDIME EXTERNAL EXIT 11</p>
-      <h1>TANDIME-ONUS</h1>
+      <div>
+        <p class="identity-label">
+          ELLISTRIP · WEB11 · TANDIME
+        </p>
+
+        <h1>
+          TANDIME-ONUS
+        </h1>
+      </div>
+
+      <div
+        class="exit-number"
+        aria-label="TANDIME Exit 11"
+      >
+        <span>
+          CLOUD EXIT
+        </span>
+
+        <strong>
+          11
+        </strong>
+      </div>
     </header>
 
-    <section class="exit-status">
-      <div>
-        <span>EXIT STATE</span>
-        <strong id="exitState">
-          CONNECTING
-        </strong>
+    <section
+      class="maze-explanation"
+      aria-labelledby="mazeTitle"
+    >
+      <p class="section-label">
+        FROM THE MAZE TO THE INTERNET
+      </p>
+
+      <h2 id="mazeTitle">
+        THE MAZE IS THE INTERNAL TANDIME TRANSPORT SPACE
+      </h2>
+
+      <div class="maze-copy">
+        <p>
+          <strong>A PRESENT LIVE</strong>
+          is one of the multiple lives happening now.
+          It moves through TANDIME while it remains
+          present and a live.
+        </p>
+
+        <p>
+          <strong>PAST PRESENT A LIVE</strong>
+          means the past is present and a live again.
+          It is not called a replay inside this
+          destination.
+        </p>
+
+        <p>
+          The MAZE observes transported cargo without
+          owning it. Cargo continues moving through
+          TANDIME instead of becoming property of the
+          station.
+        </p>
+
+        <p>
+          WEB11 opens the external passage.
+          Cloud Exit 11 carries temporary cargo beyond
+          the ELLISTRIP runtime and makes it available
+          to TANDIME-ONUS.
+        </p>
       </div>
 
-      <div>
-        <span>CARGO</span>
-        <strong id="cargoId">
-          NO CARGO
-        </strong>
-      </div>
-
-      <div>
-        <span>LEASE</span>
-        <strong id="expiresAt">
-          NO ACTIVE LEASE
-        </strong>
-      </div>
-    </section>
-
-    <section class="payload-stage">
-      <img
-        id="onusPayload"
-        alt="TANDIME transported cargo"
-        hidden
+      <div
+        class="transport-route"
+        aria-label="TANDIME transport route"
       >
+        <div class="route-station">
+          <span>
+            ORIGIN
+          </span>
+
+          <strong>
+            A PRESENT LIVE
+          </strong>
+        </div>
+
+        <div class="route-station maze">
+          <span>
+            INTERNAL TRANSPORT
+          </span>
+
+          <strong>
+            MAZE
+          </strong>
+        </div>
+
+        <div class="route-station web11">
+          <span>
+            GATEWAY
+          </span>
+
+          <strong>
+            WEB11
+          </strong>
+        </div>
+
+        <div class="route-station">
+          <span>
+            EXTERNAL PASSAGE
+          </span>
+
+          <strong>
+            CLOUD EXIT 11
+          </strong>
+        </div>
+
+        <div class="route-station onus">
+          <span>
+            INTERNET DESTINATION
+          </span>
+
+          <strong>
+            TANDIME-ONUS
+          </strong>
+        </div>
+      </div>
     </section>
 
-    <footer>
+    <section
+      class="receiver-panel"
+      aria-labelledby="receiverTitle"
+    >
+      <div class="receiver-heading">
+        <h2 id="receiverTitle">
+          EXIT 11 RECEIVER
+        </h2>
+
+        <p
+          id="connectionDetail"
+          class="connection-detail"
+        >
+          CONNECTING TO TANDIME CLOUD EXIT MANAGER
+        </p>
+      </div>
+
+      <div class="exit-status">
+        <div class="status-cell">
+          <span>
+            EXIT STATE
+          </span>
+
+          <strong
+            id="exitState"
+            data-state="connecting"
+          >
+            CONNECTING
+          </strong>
+        </div>
+
+        <div class="status-cell">
+          <span>
+            CARGO ID
+          </span>
+
+          <strong id="cargoId">
+            NO CARGO
+          </strong>
+        </div>
+
+        <div class="status-cell">
+          <span>
+            PAYLOAD TYPE
+          </span>
+
+          <strong id="payloadType">
+            NONE
+          </strong>
+        </div>
+
+        <div class="status-cell">
+          <span>
+            OPENED AT
+          </span>
+
+          <strong id="openedAt">
+            NOT OPEN
+          </strong>
+        </div>
+
+        <div class="status-cell">
+          <span>
+            LEASE REMAINING
+          </span>
+
+          <strong id="leaseCountdown">
+            NO ACTIVE LEASE
+          </strong>
+        </div>
+      </div>
+
+      <div
+        id="payloadStage"
+        class="payload-stage"
+        aria-live="polite"
+        aria-label="Transported cargo stage"
+      ></div>
+
+      <div class="exit-status">
+        <div class="status-cell">
+          <span>
+            EXIT NUMBER
+          </span>
+
+          <strong>
+            11
+          </strong>
+        </div>
+
+        <div class="status-cell">
+          <span>
+            TRANSPORT
+          </span>
+
+          <strong>
+            TANDIME
+          </strong>
+        </div>
+
+        <div class="status-cell">
+          <span>
+            INTERNAL STATION
+          </span>
+
+          <strong>
+            MAZE
+          </strong>
+        </div>
+
+        <div class="status-cell">
+          <span>
+            GATEWAY
+          </span>
+
+          <strong>
+            WEB11
+          </strong>
+        </div>
+
+        <div class="status-cell">
+          <span>
+            LEASE EXPIRATION
+          </span>
+
+          <strong id="expiresAt">
+            NO ACTIVE LEASE
+          </strong>
+        </div>
+      </div>
+    </section>
+
+    <footer class="onus-footer">
+      <p>
+        TANDIME-ONUS reads only the public temporary
+        lease and cargo routes. Private exit controls
+        remain inside the ELLISTRIP infrastructure.
+      </p>
+
       <a
+        class="return-tunnel"
         href="https://ellistrip.com/ellistriponus.html"
       >
         RETURN THROUGH WEB11
