@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-
   workflow_dispatch:
 
 permissions:
@@ -13,8 +12,8 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: tandime-onus-pages-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   deploy:
