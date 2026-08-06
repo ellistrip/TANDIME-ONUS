@@ -1,81 +1,19 @@
-/*
-==========================================================
-TANDIME-ONUS
-Initial Configuration
-==========================================================
-*/
-
-const CONFIG = {
+window.TANDIME_ONUS_CONFIG = Object.freeze({
   application: {
     name: "TANDIME-ONUS",
-    version: "1.0.0",
-    environment: "production"
+    version: "0.1.0",
+    role: "EXTERNAL_TANDIME_EXIT"
   },
 
-  transport: {
-    system: "TANDIME",
-    connected: false,
-    endpoint: "",
-    protocol: "websocket"
+  exit: {
+    number: "11",
+    leaseUrl:
+      "https://ellistrip.com/api/tandime/exits/11/lease",
+    pollMilliseconds: 3000
   },
 
-  web11: {
-    enabled: true,
-    entry: "WEB11",
-    returnTunnel: false
-  },
-
-  mosaic: {
-    mode: "EMPTY",
-    rows: 0,
-    columns: 0,
-    screens: []
-  },
-
-  live: {
-    acceptPresentLive: true,
-    acceptPastPresentALive: true
+  returnRoute: {
+    web11:
+      "https://ellistrip.com/ellistriponus.html"
   }
-};
-
-Object.freeze(CONFIG);/*
-==========================================================
-TANDIME-ONUS
-Initial Configuration
-==========================================================
-*/
-
-const CONFIG = {
-  application: {
-    name: "TANDIME-ONUS",
-    version: "1.0.0",
-    environment: "production"
-  },
-
-  transport: {
-    system: "TANDIME",
-    connected: false,
-    endpoint: "",
-    protocol: "websocket"
-  },
-
-  web11: {
-    enabled: true,
-    entry: "WEB11",
-    returnTunnel: false
-  },
-
-  mosaic: {
-    mode: "EMPTY",
-    rows: 0,
-    columns: 0,
-    screens: []
-  },
-
-  live: {
-    acceptPresentLive: true,
-    acceptPastPresentALive: true
-  }
-};
-
-Object.freeze(CONFIG);
+});
