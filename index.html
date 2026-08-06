@@ -5,12 +5,12 @@
 
   <meta
     name="viewport"
-    content="width=device-width, initial-scale=1"
+    content="width=device-width,initial-scale=1"
   >
 
   <meta
     name="description"
-    content="TANDIME-ONUS is the external destination connected to TANDIME Cloud Exit 11."
+    content="TANDIME-ONUS external live mosaic destination."
   >
 
   <title>TANDIME-ONUS</title>
@@ -22,151 +22,64 @@
 </head>
 
 <body>
-  <main class="onus-shell">
-    <header class="onus-header">
-      <div>
-        <p class="identity-label">
-          ELLISTRIP · WEB11 · TANDIME
-        </p>
-
-        <h1>
-          TANDIME-ONUS
-        </h1>
-      </div>
-
-      <div
-        class="exit-number"
-        aria-label="TANDIME Exit 11"
-      >
-        <span>
-          CLOUD EXIT
-        </span>
-
-        <strong>
-          11
-        </strong>
-      </div>
-    </header>
+  <main class="onus">
+    <!-- ==================================================
+         THE EYE
+         Nothing except the artwork and transported lives
+         may appear inside this frame.
+         ================================================== -->
 
     <section
-      class="maze-explanation"
-      aria-labelledby="mazeTitle"
+      class="eye-stage"
+      aria-label="TANDIME-ONUS live mosaic eye"
     >
-      <p class="section-label">
-        FROM THE MAZE TO THE INTERNET
-      </p>
-
-      <h2 id="mazeTitle">
-        THE MAZE IS THE INTERNAL TANDIME TRANSPORT SPACE
-      </h2>
-
-      <div class="maze-copy">
-        <p>
-          <strong>A PRESENT LIVE</strong>
-          is one of the multiple lives happening now.
-          It moves through TANDIME while it remains
-          present and a live.
-        </p>
-
-        <p>
-          <strong>PAST PRESENT A LIVE</strong>
-          means the past is present and a live again.
-          It is not called a replay inside this
-          destination.
-        </p>
-
-        <p>
-          The MAZE observes transported cargo without
-          owning it. Cargo continues moving through
-          TANDIME instead of becoming property of the
-          station.
-        </p>
-
-        <p>
-          WEB11 opens the external passage.
-          Cloud Exit 11 carries temporary cargo beyond
-          the ELLISTRIP runtime and makes it available
-          to TANDIME-ONUS.
-        </p>
-      </div>
+      <img
+        class="eye-artwork"
+        src="./assets/tandime-onus-eye.png"
+        alt="TANDIME-ONUS eye"
+      >
 
       <div
-        class="transport-route"
-        aria-label="TANDIME transport route"
-      >
-        <div class="route-station">
-          <span>
-            ORIGIN
-          </span>
-
-          <strong>
-            A PRESENT LIVE
-          </strong>
-        </div>
-
-        <div class="route-station maze">
-          <span>
-            INTERNAL TRANSPORT
-          </span>
-
-          <strong>
-            MAZE
-          </strong>
-        </div>
-
-        <div class="route-station web11">
-          <span>
-            GATEWAY
-          </span>
-
-          <strong>
-            WEB11
-          </strong>
-        </div>
-
-        <div class="route-station">
-          <span>
-            EXTERNAL PASSAGE
-          </span>
-
-          <strong>
-            CLOUD EXIT 11
-          </strong>
-        </div>
-
-        <div class="route-station onus">
-          <span>
-            INTERNET DESTINATION
-          </span>
-
-          <strong>
-            TANDIME-ONUS
-          </strong>
-        </div>
-      </div>
+        id="screenMap"
+        class="screen-map"
+        aria-label="Detected live-stream panels"
+      ></div>
     </section>
 
-    <section
-      class="receiver-panel"
-      aria-labelledby="receiverTitle"
-    >
-      <div class="receiver-heading">
-        <h2 id="receiverTitle">
-          EXIT 11 RECEIVER
-        </h2>
+    <!-- ==================================================
+         ALL INTERFACE ELEMENTS LIVE BELOW THE EYE
+         ================================================== -->
 
-        <p
-          id="connectionDetail"
-          class="connection-detail"
-        >
-          CONNECTING TO TANDIME CLOUD EXIT MANAGER
-        </p>
-      </div>
+    <section class="outside-interface">
+      <header class="outside-header">
+        <div>
+          <p class="identity-label">
+            ELLISTRIP · WEB11 · TANDIME
+          </p>
 
-      <div class="exit-status">
-        <div class="status-cell">
+          <h1>
+            TANDIME-ONUS
+          </h1>
+        </div>
+
+        <div class="exit-mark">
           <span>
-            EXIT STATE
+            CLOUD EXIT
+          </span>
+
+          <strong>
+            11
+          </strong>
+        </div>
+      </header>
+
+      <section
+        class="status-panel outside-status"
+        aria-label="TANDIME Exit 11 status"
+      >
+        <div class="status-item">
+          <span>
+            EXIT
           </span>
 
           <strong
@@ -177,124 +90,163 @@
           </strong>
         </div>
 
-        <div class="status-cell">
+        <div class="status-item">
           <span>
-            CARGO ID
+            TOTAL SCREENS
           </span>
 
-          <strong id="cargoId">
-            NO CARGO
+          <strong id="screenCount">
+            128
           </strong>
         </div>
 
-        <div class="status-cell">
+        <div class="status-item">
           <span>
-            PAYLOAD TYPE
+            OCCUPIED
           </span>
 
-          <strong id="payloadType">
-            NONE
+          <strong id="occupiedCount">
+            0
           </strong>
         </div>
 
-        <div class="status-cell">
+        <div class="status-item">
           <span>
-            OPENED AT
+            A PRESENT LIVE
           </span>
 
-          <strong id="openedAt">
-            NOT OPEN
+          <strong id="presentCount">
+            0
           </strong>
         </div>
 
-        <div class="status-cell">
+        <div class="status-item">
           <span>
-            LEASE REMAINING
+            PAST PRESENT A LIVE
           </span>
 
-          <strong id="leaseCountdown">
-            NO ACTIVE LEASE
+          <strong id="pastPresentCount">
+            0
           </strong>
         </div>
-      </div>
+      </section>
 
-      <div
-        id="payloadStage"
-        class="payload-stage"
-        aria-live="polite"
-        aria-label="Transported cargo stage"
-      ></div>
-
-      <div class="exit-status">
-        <div class="status-cell">
-          <span>
-            EXIT NUMBER
-          </span>
-
-          <strong>
-            11
-          </strong>
-        </div>
-
-        <div class="status-cell">
-          <span>
-            TRANSPORT
-          </span>
-
-          <strong>
-            TANDIME
-          </strong>
-        </div>
-
-        <div class="status-cell">
-          <span>
-            INTERNAL STATION
-          </span>
-
-          <strong>
-            MAZE
-          </strong>
-        </div>
-
-        <div class="status-cell">
-          <span>
-            GATEWAY
-          </span>
-
-          <strong>
-            WEB11
-          </strong>
-        </div>
-
-        <div class="status-cell">
-          <span>
-            LEASE EXPIRATION
-          </span>
-
-          <strong id="expiresAt">
-            NO ACTIVE LEASE
-          </strong>
-        </div>
-      </div>
-    </section>
-
-    <footer class="onus-footer">
-      <p>
-        TANDIME-ONUS reads only the public temporary
-        lease and cargo routes. Private exit controls
-        remain inside the ELLISTRIP infrastructure.
-      </p>
-
-      <a
-        class="return-tunnel"
-        href="https://ellistrip.com/ellistriponus.html"
+      <aside
+        id="screenInspector"
+        class="screen-inspector outside-inspector"
+        hidden
       >
-        RETURN THROUGH WEB11
-      </a>
-    </footer>
+        <button
+          id="closeInspector"
+          type="button"
+          aria-label="Close screen inspector"
+        >
+          ×
+        </button>
+
+        <p>
+          SELECTED SCREEN
+        </p>
+
+        <dl>
+          <div>
+            <dt>ID</dt>
+            <dd id="inspectId">—</dd>
+          </div>
+
+          <div>
+            <dt>GROUP</dt>
+            <dd id="inspectGroup">—</dd>
+          </div>
+
+          <div>
+            <dt>REGION</dt>
+            <dd id="inspectRegion">—</dd>
+          </div>
+
+          <div>
+            <dt>POSITION</dt>
+            <dd id="inspectPosition">—</dd>
+          </div>
+
+          <div>
+            <dt>GEOMETRY</dt>
+            <dd id="inspectRotation">
+              FOUR-CORNER PERSPECTIVE
+            </dd>
+          </div>
+
+          <div>
+            <dt>STREAM</dt>
+            <dd id="inspectStream">
+              EMPTY
+            </dd>
+          </div>
+        </dl>
+      </aside>
+
+      <section class="maze-explanation">
+        <p class="eyebrow">
+          FROM THE MAZE TO THE INTERNET
+        </p>
+
+        <h2>
+          THE MAZE IS THE INTERNAL TANDIME TRANSPORT SPACE
+        </h2>
+
+        <div class="explanation-columns">
+          <p>
+            <strong>A PRESENT LIVE</strong>
+            is one of the multiple lives happening now.
+            It moves through TANDIME while remaining
+            present and a live.
+          </p>
+
+          <p>
+            <strong>PAST PRESENT A LIVE</strong>
+            means the past is present and a live again.
+          </p>
+
+          <p>
+            The MAZE observes transported cargo without
+            owning it. WEB11 opens the external passage.
+          </p>
+
+          <p>
+            Cloud Exit 11 makes temporary cargo visible
+            inside the TANDIME-ONUS eye.
+          </p>
+        </div>
+
+        <div class="transport-law">
+          <span>A PRESENT LIVE</span>
+          <b>→</b>
+          <span>MAZE</span>
+          <b>→</b>
+          <span>WEB11</span>
+          <b>→</b>
+          <span>EXIT 11</span>
+          <b>→</b>
+          <span>TANDIME-ONUS</span>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <span>
+          128 DETECTED FOUR-CORNER SCREENS
+        </span>
+
+        <a
+          href="https://ellistrip.com/ellistriponus.html"
+        >
+          RETURN THROUGH WEB11
+        </a>
+      </footer>
+    </section>
   </main>
 
   <script src="./config.js"></script>
+  <script src="./mosaic/eye-map.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>

@@ -1,570 +1,524 @@
-/*
-==========================================================
-TANDIME-ONUS
-Public receiver for TANDIME Cloud Exit 11.
-
-This browser never receives or stores the private admin token.
-It reads only the public lease and temporary payload routes.
-==========================================================
-*/
-
 "use strict";
 
-const CONFIG = window.TANDIME_ONUS_CONFIG;
+const CONFIG =
+  window.TANDIME_ONUS_CONFIG;
+
+const EYE_MAP =
+  window.TANDIME_ONUS_EYE_MAP;
 
 if (!CONFIG) {
   throw new Error(
-    "TANDIME-ONUS configuration was not loaded."
+    "TANDIME-ONUS config missing."
   );
 }
 
-const receiverState = {
-  connected: false,
-  active: false,
-  cargoId: null,
-  payloadType: null,
-  payloadUrl: null,
-  openedAt: null,
-  expiresAt: null,
-  trace: null,
-  pollTimer: null,
-  countdownTimer: null,
-  lastPayloadIdentity: null
+if (
+  !Array.isArray(EYE_MAP) ||
+  EYE_MAP.length === 0
+) {
+  throw new Error(
+    "TANDIME-ONUS detected eye map is unavailable."
+  );
+}
+
+const runtime = {
+  screens: new Map(),
+  streamAssignments: new Map(),
+  activeCargoId: null,
+  lastLeaseIdentity: null,
+  pollTimer: null
 };
 
-function element(id) {
-  return document.getElementById(id);
-}
+const byId = (id) =>
+  document.getElementById(id);
 
-function setText(id, value) {
-  const target = element(id);
-
-  if (target) {
-    target.textContent = String(value);
-  }
-}
-
-function setReceiverState(value) {
-  const target = element("exitState");
-
-  if (!target) return;
-
-  target.textContent = value;
-  target.dataset.state =
-    String(value).toLowerCase().replace(/\s+/g, "-");
-}
-
-function absoluteEllistripUrl(value) {
-  if (
-    typeof value !== "string" ||
-    !value.trim()
-  ) {
-    return "";
-  }
+function absolutePayloadUrl(value) {
+  if (!value) return "";
 
   try {
-    const resolved = new URL(
-      value,
-      CONFIG.exit.payloadOrigin
-    );
+    const url =
+      new URL(
+        value,
+        CONFIG.exit.payloadOrigin
+      );
 
     if (
-      resolved.origin !==
-      new URL(CONFIG.exit.payloadOrigin).origin
+      url.origin !==
+      new URL(
+        CONFIG.exit.payloadOrigin
+      ).origin
     ) {
       return "";
     }
 
-    return resolved.toString();
+    return url.toString();
   } catch {
     return "";
   }
 }
 
-function formatDate(value) {
-  if (!value) return "NO ACTIVE LEASE";
+function stableHash(value) {
+  let hash = 2166136261;
 
-  const date = new Date(value);
+  const text =
+    String(value || "");
 
-  if (Number.isNaN(date.getTime())) {
-    return String(value);
+  for (
+    let index = 0;
+    index < text.length;
+    index += 1
+  ) {
+    hash ^= text.charCodeAt(index);
+
+    hash =
+      Math.imul(
+        hash,
+        16777619
+      );
   }
 
-  return date.toLocaleString();
+  return hash >>> 0;
 }
 
-function formatRemainingTime(expiresAt) {
-  if (!expiresAt) return "NO ACTIVE LEASE";
-
-  const expiration = Date.parse(expiresAt);
-
-  if (!Number.isFinite(expiration)) {
-    return "UNKNOWN";
-  }
-
-  const remaining =
-    Math.max(0, expiration - Date.now());
-
-  const totalSeconds =
-    Math.floor(remaining / 1000);
-
-  const minutes =
-    Math.floor(totalSeconds / 60);
-
-  const seconds =
-    totalSeconds % 60;
-
-  return (
-    String(minutes).padStart(2, "0") +
-    ":" +
-    String(seconds).padStart(2, "0")
-  );
-}
-
-function updateCountdown() {
-  setText(
-    "leaseCountdown",
-    formatRemainingTime(
-      receiverState.expiresAt
+function stableScreenForStream(streamId) {
+  if (
+    runtime.streamAssignments.has(
+      streamId
     )
-  );
-}
-
-function beginCountdown() {
-  if (receiverState.countdownTimer) {
-    window.clearInterval(
-      receiverState.countdownTimer
+  ) {
+    return runtime.streamAssignments.get(
+      streamId
     );
   }
 
-  updateCountdown();
+  const start =
+    stableHash(streamId) %
+    EYE_MAP.length;
 
-  receiverState.countdownTimer =
-    window.setInterval(
-      updateCountdown,
-      1000
-    );
-}
+  for (
+    let offset = 0;
+    offset < EYE_MAP.length;
+    offset += 1
+  ) {
+    const screen =
+      EYE_MAP[
+        (start + offset) %
+          EYE_MAP.length
+      ];
 
-function stopCountdown() {
-  if (receiverState.countdownTimer) {
-    window.clearInterval(
-      receiverState.countdownTimer
-    );
+    const occupied =
+      Array.from(
+        runtime.streamAssignments.values()
+      ).includes(screen.screenId);
 
-    receiverState.countdownTimer = null;
+    if (!occupied) {
+      runtime.streamAssignments.set(
+        streamId,
+        screen.screenId
+      );
+
+      return screen.screenId;
+    }
   }
 
-  setText(
-    "leaseCountdown",
-    "NO ACTIVE LEASE"
-  );
+  return EYE_MAP[start].screenId;
 }
 
-function clearStage() {
-  const stage = element("payloadStage");
+function createScreen(screen) {
+  const node =
+    document.createElement("article");
 
-  if (!stage) return;
+  node.className =
+    "live-screen empty";
 
-  stage.replaceChildren();
+  node.dataset.screenId =
+    screen.screenId;
 
-  stage.classList.remove("has-cargo");
+  node.dataset.group =
+    screen.group;
 
-  const waiting = document.createElement("div");
+  const corners =
+    Array.isArray(screen.corners)
+      ? screen.corners
+      : [];
 
-  waiting.className = "waiting-message";
-
-  waiting.innerHTML = `
-    <span>EXIT 11</span>
-    <strong>WAITING FOR TRANSPORTED CARGO</strong>
-    <p>
-      The screens remain empty until WEB11 opens
-      the external TANDIME exit.
-    </p>
-  `;
-
-  stage.appendChild(waiting);
-}
-
-function renderImage(payloadUrl, cargoId) {
-  const stage = element("payloadStage");
-
-  if (!stage) return;
-
-  const image = document.createElement("img");
-
-  image.className = "transported-payload";
-  image.alt =
-    "TANDIME transported cargo " +
-    (cargoId || "");
-
-  image.src =
-    payloadUrl +
-    (payloadUrl.includes("?") ? "&" : "?") +
-    "t=" +
-    Date.now();
-
-  image.addEventListener("load", () => {
-    stage.classList.add("has-cargo");
-  });
-
-  image.addEventListener("error", () => {
-    renderUnsupportedPayload(
-      "PAYLOAD COULD NOT BE DISPLAYED"
+  if (corners.length !== 4) {
+    throw new Error(
+      "Screen " +
+        screen.screenId +
+        " does not have four corners."
     );
-  });
+  }
 
-  stage.replaceChildren(image);
+  const xs =
+    corners.map(
+      (corner) => Number(corner.x)
+    );
+
+  const ys =
+    corners.map(
+      (corner) => Number(corner.y)
+    );
+
+  const minimumX =
+    Math.min(...xs);
+
+  const maximumX =
+    Math.max(...xs);
+
+  const minimumY =
+    Math.min(...ys);
+
+  const maximumY =
+    Math.max(...ys);
+
+  const width =
+    maximumX - minimumX;
+
+  const height =
+    maximumY - minimumY;
+
+  node.style.left =
+    minimumX + "%";
+
+  node.style.top =
+    minimumY + "%";
+
+  node.style.width =
+    width + "%";
+
+  node.style.height =
+    height + "%";
+
+  node.style.zIndex =
+    String(screen.layer || 1);
+
+  const polygon =
+    corners
+      .map((corner) => {
+        const localX =
+          ((Number(corner.x) - minimumX) /
+            width) *
+          100;
+
+        const localY =
+          ((Number(corner.y) - minimumY) /
+            height) *
+          100;
+
+        return (
+          localX.toFixed(5) +
+          "% " +
+          localY.toFixed(5) +
+          "%"
+        );
+      })
+      .join(",");
+
+  node.style.clipPath =
+    `polygon(${polygon})`;
+
+  node.style.webkitClipPath =
+    `polygon(${polygon})`;
+
+  const id =
+    document.createElement("span");
+
+  id.className =
+    "screen-id";
+
+  id.textContent =
+    screen.screenId;
+
+  node.appendChild(id);
+
+  node.addEventListener(
+    "click",
+    () => {
+      showInspector(
+        screen,
+        node
+      );
+    }
+  );
+
+  runtime.screens.set(
+    screen.screenId,
+    {
+      definition: screen,
+      node,
+      streamId: null,
+      cargoId: null,
+      liveType: null
+    }
+  );
+
+  return node;
 }
 
-function renderVideo(payloadUrl, cargoId) {
-  const stage = element("payloadStage");
+function buildScreenMap() {
+  const screenMap =
+    byId("screenMap");
 
-  if (!stage) return;
+  const fragment =
+    document.createDocumentFragment();
 
-  const video = document.createElement("video");
+  for (const screen of EYE_MAP) {
+    fragment.appendChild(
+      createScreen(screen)
+    );
+  }
 
-  video.className = "transported-payload";
-  video.controls = true;
+  screenMap.replaceChildren(fragment);
+
+  byId("screenCount").textContent =
+    String(EYE_MAP.length);
+}
+
+function clearScreen(screenId) {
+  const record =
+    runtime.screens.get(screenId);
+
+  if (!record) return;
+
+  record.node
+    .querySelectorAll(
+      "video,img,.live-marker"
+    )
+    .forEach(
+      (node) => node.remove()
+    );
+
+  record.node.classList.remove(
+    "occupied"
+  );
+
+  record.node.classList.add(
+    "empty"
+  );
+
+  record.streamId = null;
+  record.cargoId = null;
+  record.liveType = null;
+}
+
+function clearAllScreens() {
+  for (
+    const screenId of runtime.screens.keys()
+  ) {
+    clearScreen(screenId);
+  }
+
+  runtime.streamAssignments.clear();
+  runtime.activeCargoId = null;
+
+  updateCounts();
+}
+
+function addLiveMarker(node) {
+  const marker =
+    document.createElement("span");
+
+  marker.className =
+    "live-marker";
+
+  marker.textContent =
+    "LIVE";
+
+  node.appendChild(marker);
+}
+
+function placeVideo({
+  screenId,
+  streamId,
+  cargoId,
+  liveType,
+  playbackUrl
+}) {
+  const record =
+    runtime.screens.get(screenId);
+
+  if (!record) return;
+
+  clearScreen(screenId);
+
+  const video =
+    document.createElement("video");
+
   video.autoplay = true;
   video.muted = true;
   video.playsInline = true;
-  video.preload = "auto";
-
-  video.setAttribute(
-    "aria-label",
-    "TANDIME transported cargo " +
-      (cargoId || "")
-  );
-
-  video.src =
-    payloadUrl +
-    (payloadUrl.includes("?") ? "&" : "?") +
-    "t=" +
-    Date.now();
+  video.controls = false;
+  video.preload = "metadata";
+  video.src = playbackUrl;
 
   video.addEventListener(
-    "loadeddata",
+    "canplay",
     () => {
-      stage.classList.add("has-cargo");
-
       video.play().catch(() => {});
     }
   );
 
-  video.addEventListener("error", () => {
-    renderUnsupportedPayload(
-      "VIDEO PAYLOAD COULD NOT BE DISPLAYED"
-    );
-  });
+  record.node.prepend(video);
+  addLiveMarker(record.node);
 
-  stage.replaceChildren(video);
+  record.node.classList.remove(
+    "empty"
+  );
+
+  record.node.classList.add(
+    "occupied"
+  );
+
+  record.streamId = streamId;
+  record.cargoId = cargoId;
+  record.liveType = liveType;
 }
 
-function renderAudio(payloadUrl, cargoId) {
-  const stage = element("payloadStage");
+function placeImage({
+  screenId,
+  streamId,
+  cargoId,
+  liveType,
+  playbackUrl
+}) {
+  const record =
+    runtime.screens.get(screenId);
 
-  if (!stage) return;
+  if (!record) return;
 
-  const shell = document.createElement("div");
+  clearScreen(screenId);
 
-  shell.className = "audio-payload";
+  const image =
+    document.createElement("img");
 
-  const label = document.createElement("strong");
+  image.src =
+    playbackUrl;
 
-  label.textContent =
-    cargoId || "TRANSPORTED AUDIO";
+  image.alt =
+    streamId || cargoId || "Cargo";
 
-  const audio = document.createElement("audio");
+  record.node.prepend(image);
+  addLiveMarker(record.node);
 
-  audio.controls = true;
-  audio.autoplay = true;
-  audio.preload = "auto";
+  record.node.classList.remove(
+    "empty"
+  );
 
-  audio.src =
-    payloadUrl +
-    (payloadUrl.includes("?") ? "&" : "?") +
-    "t=" +
-    Date.now();
+  record.node.classList.add(
+    "occupied"
+  );
 
-  shell.append(label, audio);
-
-  stage.replaceChildren(shell);
-  stage.classList.add("has-cargo");
+  record.streamId = streamId;
+  record.cargoId = cargoId;
+  record.liveType = liveType;
 }
 
-function renderJson(payloadUrl) {
-  const stage = element("payloadStage");
-
-  if (!stage) return;
-
-  fetch(payloadUrl, {
-    method: "GET",
-    cache: "no-store"
-  })
-    .then((response) => {
-      if (!response.ok) {
-        throw new Error(
-          "Payload request failed: " +
-            response.status
-        );
-      }
-
-      return response.json();
-    })
-    .then((payload) => {
-      const output =
-        document.createElement("pre");
-
-      output.className = "json-payload";
-
-      output.textContent =
-        JSON.stringify(
-          payload,
-          null,
-          2
-        );
-
-      stage.replaceChildren(output);
-      stage.classList.add("has-cargo");
-    })
-    .catch((error) => {
-      console.error(
-        "TANDIME JSON payload:",
-        error
-      );
-
-      renderUnsupportedPayload(
-        "JSON PAYLOAD COULD NOT BE READ"
-      );
-    });
-}
-
-function renderUnsupportedPayload(message) {
-  const stage = element("payloadStage");
-
-  if (!stage) return;
-
-  const notice = document.createElement("div");
-
-  notice.className = "unsupported-payload";
-
-  notice.innerHTML = `
-    <span>CARGO ARRIVED</span>
-    <strong>${message}</strong>
-    <p>
-      The lease is active, but this version of
-      TANDIME-ONUS does not yet render this payload type.
-    </p>
-  `;
-
-  stage.replaceChildren(notice);
-  stage.classList.add("has-cargo");
-}
-
-function renderPayload(lease) {
-  const payloadUrl =
-    absoluteEllistripUrl(
-      lease.payloadUrl
-    );
-
-  if (!payloadUrl) {
-    renderUnsupportedPayload(
-      "INVALID PAYLOAD ADDRESS"
-    );
-
-    return;
-  }
-
-  const payloadType =
+function normalizedLiveType(item) {
+  const source =
     String(
-      lease.payloadType ||
-      "application/octet-stream"
-    ).toLowerCase();
-
-  if (payloadType.startsWith("image/")) {
-    renderImage(
-      payloadUrl,
-      lease.cargoId
-    );
-
-    return;
-  }
-
-  if (payloadType.startsWith("video/")) {
-    renderVideo(
-      payloadUrl,
-      lease.cargoId
-    );
-
-    return;
-  }
-
-  if (payloadType.startsWith("audio/")) {
-    renderAudio(
-      payloadUrl,
-      lease.cargoId
-    );
-
-    return;
-  }
+      item.liveType ||
+      item.type ||
+      item.status ||
+      ""
+    )
+      .trim()
+      .toUpperCase()
+      .replace(/[\s-]+/g, "_");
 
   if (
-    payloadType.includes("json")
+    source.includes(
+      "PAST_PRESENT_A_LIVE"
+    )
   ) {
-    renderJson(payloadUrl);
-
-    return;
+    return "PAST_PRESENT_A_LIVE";
   }
 
-  renderUnsupportedPayload(
-    "UNSUPPORTED PAYLOAD TYPE"
-  );
+  return "A_PRESENT_LIVE";
 }
 
-function renderWaiting() {
-  receiverState.active = false;
-  receiverState.cargoId = null;
-  receiverState.payloadType = null;
-  receiverState.payloadUrl = null;
-  receiverState.openedAt = null;
-  receiverState.expiresAt = null;
-  receiverState.trace = null;
-  receiverState.lastPayloadIdentity = null;
+function normalizeCargoPayload(
+  payload,
+  lease
+) {
+  const candidates =
+    Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload.lives)
+        ? payload.lives
+        : Array.isArray(payload.items)
+          ? payload.items
+          : Array.isArray(payload.screens)
+            ? payload.screens
+            : payload.streamId ||
+                payload.playbackUrl ||
+                payload.playbackHls
+              ? [payload]
+              : [];
 
-  setReceiverState("WAITING");
+  return candidates
+    .map((item, index) => {
+      const streamId =
+        String(
+          item.streamId ||
+          item.id ||
+          item.liveId ||
+          `${lease.cargoId}-${index}`
+        );
 
-  setText(
-    "cargoId",
-    "NO CARGO"
-  );
+      const rawUrl =
+        item.playbackHls ||
+        item.playbackUrl ||
+        item.url ||
+        item.src ||
+        "";
 
-  setText(
-    "payloadType",
-    "NONE"
-  );
-
-  setText(
-    "openedAt",
-    "NOT OPEN"
-  );
-
-  setText(
-    "expiresAt",
-    "NO ACTIVE LEASE"
-  );
-
-  stopCountdown();
-  clearStage();
-}
-
-function renderActive(lease) {
-  const payloadUrl =
-    absoluteEllistripUrl(
-      lease.payloadUrl
+      return {
+        streamId,
+        cargoId:
+          item.cargoId ||
+          lease.cargoId ||
+          "",
+        liveType:
+          normalizedLiveType(item),
+        playbackUrl:
+          absolutePayloadUrl(rawUrl),
+        payloadType:
+          String(
+            item.payloadType ||
+            item.mime ||
+            lease.payloadType ||
+            ""
+          ).toLowerCase()
+      };
+    })
+    .filter(
+      (item) =>
+        item.streamId &&
+        item.playbackUrl
     );
-
-  receiverState.active = true;
-  receiverState.cargoId =
-    lease.cargoId || null;
-
-  receiverState.payloadType =
-    lease.payloadType || null;
-
-  receiverState.payloadUrl =
-    payloadUrl || null;
-
-  receiverState.openedAt =
-    lease.openedAt || null;
-
-  receiverState.expiresAt =
-    lease.expiresAt || null;
-
-  receiverState.trace =
-    lease.trace || null;
-
-  setReceiverState("ACTIVE");
-
-  setText(
-    "cargoId",
-    receiverState.cargoId ||
-      "UNKNOWN CARGO"
-  );
-
-  setText(
-    "payloadType",
-    receiverState.payloadType ||
-      "UNKNOWN"
-  );
-
-  setText(
-    "openedAt",
-    formatDate(
-      receiverState.openedAt
-    )
-  );
-
-  setText(
-    "expiresAt",
-    formatDate(
-      receiverState.expiresAt
-    )
-  );
-
-  beginCountdown();
-
-  const payloadIdentity = [
-    receiverState.cargoId || "",
-    receiverState.payloadUrl || "",
-    receiverState.expiresAt || ""
-  ].join("|");
-
-  if (
-    payloadIdentity !==
-    receiverState.lastPayloadIdentity
-  ) {
-    receiverState.lastPayloadIdentity =
-      payloadIdentity;
-
-    renderPayload(lease);
-  }
 }
 
-function renderConnectionError(error) {
-  receiverState.connected = false;
-
-  setReceiverState("CONNECTION ERROR");
-
-  setText(
-    "connectionDetail",
-    error instanceof Error
-      ? error.message
-      : "EXIT 11 UNREACHABLE"
-  );
-}
-
-async function readExit11Lease() {
-  const requestUrl =
-    CONFIG.exit.leaseUrl +
-    "?t=" +
-    Date.now();
-
-  const response = await fetch(
-    requestUrl,
-    {
-      method: "GET",
-      mode: "cors",
-      cache: "no-store",
-      credentials: "omit",
-      headers: {
-        Accept: "application/json"
+async function readJsonPayload(
+  payloadUrl
+) {
+  const response =
+    await fetch(
+      payloadUrl +
+        (payloadUrl.includes("?")
+          ? "&"
+          : "?") +
+        "t=" +
+        Date.now(),
+      {
+        cache: "no-store",
+        credentials: "omit"
       }
-    }
-  );
+    );
 
   if (!response.ok) {
     throw new Error(
-      "Exit 11 lease returned HTTP " +
+      "Cargo payload returned HTTP " +
         response.status
     );
   }
@@ -572,704 +526,320 @@ async function readExit11Lease() {
   return response.json();
 }
 
-async function pollExit11() {
-  try {
-    const lease =
-      await readExit11Lease();
-
-    receiverState.connected = true;
-
-    setText(
-      "connectionDetail",
-      "CONNECTED TO TANDIME CLOUD EXIT MANAGER"
-    );
-
-    if (
-      !lease ||
-      lease.active !== true
-    ) {
-      renderWaiting();
-      return;
-    }
-
-    renderActive(lease);
-  } catch (error) {
-    console.error(
-      "TANDIME Exit 11:",
-      error
-    );
-
-    renderConnectionError(error);
-  }
-}
-
-function startExitReceiver() {
-  clearStage();
-
-  pollExit11();
-
-  receiverState.pollTimer =
-    window.setInterval(
-      pollExit11,
-      CONFIG.exit.pollMilliseconds
-    );
-}
-
-function stopExitReceiver() {
-  if (receiverState.pollTimer) {
-    window.clearInterval(
-      receiverState.pollTimer
-    );
-
-    receiverState.pollTimer = null;
-  }
-
-  stopCountdown();
-}
-
-window.addEventListener(
-  "DOMContentLoaded",
-  startExitReceiver
-);
-
-window.addEventListener(
-  "beforeunload",
-  stopExitReceiver
-);/*
-==========================================================
-TANDIME-ONUS
-Public receiver for TANDIME Cloud Exit 11.
-
-This browser never receives or stores the private admin token.
-It reads only the public lease and temporary payload routes.
-==========================================================
-*/
-
-"use strict";
-
-const CONFIG = window.TANDIME_ONUS_CONFIG;
-
-if (!CONFIG) {
-  throw new Error(
-    "TANDIME-ONUS configuration was not loaded."
-  );
-}
-
-const receiverState = {
-  connected: false,
-  active: false,
-  cargoId: null,
-  payloadType: null,
-  payloadUrl: null,
-  openedAt: null,
-  expiresAt: null,
-  trace: null,
-  pollTimer: null,
-  countdownTimer: null,
-  lastPayloadIdentity: null
-};
-
-function element(id) {
-  return document.getElementById(id);
-}
-
-function setText(id, value) {
-  const target = element(id);
-
-  if (target) {
-    target.textContent = String(value);
-  }
-}
-
-function setReceiverState(value) {
-  const target = element("exitState");
-
-  if (!target) return;
-
-  target.textContent = value;
-  target.dataset.state =
-    String(value).toLowerCase().replace(/\s+/g, "-");
-}
-
-function absoluteEllistripUrl(value) {
-  if (
-    typeof value !== "string" ||
-    !value.trim()
-  ) {
-    return "";
-  }
-
-  try {
-    const resolved = new URL(
-      value,
-      CONFIG.exit.payloadOrigin
-    );
-
-    if (
-      resolved.origin !==
-      new URL(CONFIG.exit.payloadOrigin).origin
-    ) {
-      return "";
-    }
-
-    return resolved.toString();
-  } catch {
-    return "";
-  }
-}
-
-function formatDate(value) {
-  if (!value) return "NO ACTIVE LEASE";
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return String(value);
-  }
-
-  return date.toLocaleString();
-}
-
-function formatRemainingTime(expiresAt) {
-  if (!expiresAt) return "NO ACTIVE LEASE";
-
-  const expiration = Date.parse(expiresAt);
-
-  if (!Number.isFinite(expiration)) {
-    return "UNKNOWN";
-  }
-
-  const remaining =
-    Math.max(0, expiration - Date.now());
-
-  const totalSeconds =
-    Math.floor(remaining / 1000);
-
-  const minutes =
-    Math.floor(totalSeconds / 60);
-
-  const seconds =
-    totalSeconds % 60;
-
-  return (
-    String(minutes).padStart(2, "0") +
-    ":" +
-    String(seconds).padStart(2, "0")
-  );
-}
-
-function updateCountdown() {
-  setText(
-    "leaseCountdown",
-    formatRemainingTime(
-      receiverState.expiresAt
-    )
-  );
-}
-
-function beginCountdown() {
-  if (receiverState.countdownTimer) {
-    window.clearInterval(
-      receiverState.countdownTimer
-    );
-  }
-
-  updateCountdown();
-
-  receiverState.countdownTimer =
-    window.setInterval(
-      updateCountdown,
-      1000
-    );
-}
-
-function stopCountdown() {
-  if (receiverState.countdownTimer) {
-    window.clearInterval(
-      receiverState.countdownTimer
-    );
-
-    receiverState.countdownTimer = null;
-  }
-
-  setText(
-    "leaseCountdown",
-    "NO ACTIVE LEASE"
-  );
-}
-
-function clearStage() {
-  const stage = element("payloadStage");
-
-  if (!stage) return;
-
-  stage.replaceChildren();
-
-  stage.classList.remove("has-cargo");
-
-  const waiting = document.createElement("div");
-
-  waiting.className = "waiting-message";
-
-  waiting.innerHTML = `
-    <span>EXIT 11</span>
-    <strong>WAITING FOR TRANSPORTED CARGO</strong>
-    <p>
-      The screens remain empty until WEB11 opens
-      the external TANDIME exit.
-    </p>
-  `;
-
-  stage.appendChild(waiting);
-}
-
-function renderImage(payloadUrl, cargoId) {
-  const stage = element("payloadStage");
-
-  if (!stage) return;
-
-  const image = document.createElement("img");
-
-  image.className = "transported-payload";
-  image.alt =
-    "TANDIME transported cargo " +
-    (cargoId || "");
-
-  image.src =
-    payloadUrl +
-    (payloadUrl.includes("?") ? "&" : "?") +
-    "t=" +
-    Date.now();
-
-  image.addEventListener("load", () => {
-    stage.classList.add("has-cargo");
-  });
-
-  image.addEventListener("error", () => {
-    renderUnsupportedPayload(
-      "PAYLOAD COULD NOT BE DISPLAYED"
-    );
-  });
-
-  stage.replaceChildren(image);
-}
-
-function renderVideo(payloadUrl, cargoId) {
-  const stage = element("payloadStage");
-
-  if (!stage) return;
-
-  const video = document.createElement("video");
-
-  video.className = "transported-payload";
-  video.controls = true;
-  video.autoplay = true;
-  video.muted = true;
-  video.playsInline = true;
-  video.preload = "auto";
-
-  video.setAttribute(
-    "aria-label",
-    "TANDIME transported cargo " +
-      (cargoId || "")
-  );
-
-  video.src =
-    payloadUrl +
-    (payloadUrl.includes("?") ? "&" : "?") +
-    "t=" +
-    Date.now();
-
-  video.addEventListener(
-    "loadeddata",
-    () => {
-      stage.classList.add("has-cargo");
-
-      video.play().catch(() => {});
-    }
-  );
-
-  video.addEventListener("error", () => {
-    renderUnsupportedPayload(
-      "VIDEO PAYLOAD COULD NOT BE DISPLAYED"
-    );
-  });
-
-  stage.replaceChildren(video);
-}
-
-function renderAudio(payloadUrl, cargoId) {
-  const stage = element("payloadStage");
-
-  if (!stage) return;
-
-  const shell = document.createElement("div");
-
-  shell.className = "audio-payload";
-
-  const label = document.createElement("strong");
-
-  label.textContent =
-    cargoId || "TRANSPORTED AUDIO";
-
-  const audio = document.createElement("audio");
-
-  audio.controls = true;
-  audio.autoplay = true;
-  audio.preload = "auto";
-
-  audio.src =
-    payloadUrl +
-    (payloadUrl.includes("?") ? "&" : "?") +
-    "t=" +
-    Date.now();
-
-  shell.append(label, audio);
-
-  stage.replaceChildren(shell);
-  stage.classList.add("has-cargo");
-}
-
-function renderJson(payloadUrl) {
-  const stage = element("payloadStage");
-
-  if (!stage) return;
-
-  fetch(payloadUrl, {
-    method: "GET",
-    cache: "no-store"
-  })
-    .then((response) => {
-      if (!response.ok) {
-        throw new Error(
-          "Payload request failed: " +
-            response.status
-        );
-      }
-
-      return response.json();
-    })
-    .then((payload) => {
-      const output =
-        document.createElement("pre");
-
-      output.className = "json-payload";
-
-      output.textContent =
-        JSON.stringify(
-          payload,
-          null,
-          2
-        );
-
-      stage.replaceChildren(output);
-      stage.classList.add("has-cargo");
-    })
-    .catch((error) => {
-      console.error(
-        "TANDIME JSON payload:",
-        error
-      );
-
-      renderUnsupportedPayload(
-        "JSON PAYLOAD COULD NOT BE READ"
-      );
-    });
-}
-
-function renderUnsupportedPayload(message) {
-  const stage = element("payloadStage");
-
-  if (!stage) return;
-
-  const notice = document.createElement("div");
-
-  notice.className = "unsupported-payload";
-
-  notice.innerHTML = `
-    <span>CARGO ARRIVED</span>
-    <strong>${message}</strong>
-    <p>
-      The lease is active, but this version of
-      TANDIME-ONUS does not yet render this payload type.
-    </p>
-  `;
-
-  stage.replaceChildren(notice);
-  stage.classList.add("has-cargo");
-}
-
-function renderPayload(lease) {
+async function applyLease(lease) {
   const payloadUrl =
-    absoluteEllistripUrl(
+    absolutePayloadUrl(
       lease.payloadUrl
     );
 
   if (!payloadUrl) {
-    renderUnsupportedPayload(
-      "INVALID PAYLOAD ADDRESS"
+    throw new Error(
+      "Exit 11 returned an invalid payload URL."
     );
-
-    return;
   }
 
   const payloadType =
     String(
-      lease.payloadType ||
-      "application/octet-stream"
+      lease.payloadType || ""
     ).toLowerCase();
 
-  if (payloadType.startsWith("image/")) {
-    renderImage(
-      payloadUrl,
-      lease.cargoId
-    );
-
-    return;
-  }
-
-  if (payloadType.startsWith("video/")) {
-    renderVideo(
-      payloadUrl,
-      lease.cargoId
-    );
-
-    return;
-  }
-
-  if (payloadType.startsWith("audio/")) {
-    renderAudio(
-      payloadUrl,
-      lease.cargoId
-    );
-
-    return;
-  }
+  runtime.activeCargoId =
+    lease.cargoId || null;
 
   if (
     payloadType.includes("json")
   ) {
-    renderJson(payloadUrl);
+    const payload =
+      await readJsonPayload(
+        payloadUrl
+      );
 
+    const lives =
+      normalizeCargoPayload(
+        payload,
+        lease
+      );
+
+    clearAllScreens();
+
+    for (const live of lives) {
+      const screenId =
+        stableScreenForStream(
+          live.streamId
+        );
+
+      if (
+        live.payloadType.startsWith(
+          "image/"
+        )
+      ) {
+        placeImage({
+          ...live,
+          screenId
+        });
+      } else {
+        placeVideo({
+          ...live,
+          screenId
+        });
+      }
+    }
+
+    updateCounts();
     return;
   }
 
-  renderUnsupportedPayload(
-    "UNSUPPORTED PAYLOAD TYPE"
-  );
-}
-
-function renderWaiting() {
-  receiverState.active = false;
-  receiverState.cargoId = null;
-  receiverState.payloadType = null;
-  receiverState.payloadUrl = null;
-  receiverState.openedAt = null;
-  receiverState.expiresAt = null;
-  receiverState.trace = null;
-  receiverState.lastPayloadIdentity = null;
-
-  setReceiverState("WAITING");
-
-  setText(
-    "cargoId",
-    "NO CARGO"
-  );
-
-  setText(
-    "payloadType",
-    "NONE"
-  );
-
-  setText(
-    "openedAt",
-    "NOT OPEN"
-  );
-
-  setText(
-    "expiresAt",
-    "NO ACTIVE LEASE"
-  );
-
-  stopCountdown();
-  clearStage();
-}
-
-function renderActive(lease) {
-  const payloadUrl =
-    absoluteEllistripUrl(
-      lease.payloadUrl
+  const screenId =
+    stableScreenForStream(
+      lease.cargoId ||
+      payloadUrl
     );
-
-  receiverState.active = true;
-  receiverState.cargoId =
-    lease.cargoId || null;
-
-  receiverState.payloadType =
-    lease.payloadType || null;
-
-  receiverState.payloadUrl =
-    payloadUrl || null;
-
-  receiverState.openedAt =
-    lease.openedAt || null;
-
-  receiverState.expiresAt =
-    lease.expiresAt || null;
-
-  receiverState.trace =
-    lease.trace || null;
-
-  setReceiverState("ACTIVE");
-
-  setText(
-    "cargoId",
-    receiverState.cargoId ||
-      "UNKNOWN CARGO"
-  );
-
-  setText(
-    "payloadType",
-    receiverState.payloadType ||
-      "UNKNOWN"
-  );
-
-  setText(
-    "openedAt",
-    formatDate(
-      receiverState.openedAt
-    )
-  );
-
-  setText(
-    "expiresAt",
-    formatDate(
-      receiverState.expiresAt
-    )
-  );
-
-  beginCountdown();
-
-  const payloadIdentity = [
-    receiverState.cargoId || "",
-    receiverState.payloadUrl || "",
-    receiverState.expiresAt || ""
-  ].join("|");
 
   if (
-    payloadIdentity !==
-    receiverState.lastPayloadIdentity
+    payloadType.startsWith(
+      "image/"
+    )
   ) {
-    receiverState.lastPayloadIdentity =
-      payloadIdentity;
-
-    renderPayload(lease);
+    placeImage({
+      screenId,
+      streamId:
+        lease.cargoId,
+      cargoId:
+        lease.cargoId,
+      liveType:
+        "A_PRESENT_LIVE",
+      playbackUrl:
+        payloadUrl
+    });
+  } else if (
+    payloadType.startsWith(
+      "video/"
+    )
+  ) {
+    placeVideo({
+      screenId,
+      streamId:
+        lease.cargoId,
+      cargoId:
+        lease.cargoId,
+      liveType:
+        "A_PRESENT_LIVE",
+      playbackUrl:
+        payloadUrl
+    });
   }
+
+  updateCounts();
 }
 
-function renderConnectionError(error) {
-  receiverState.connected = false;
+function updateCounts() {
+  let occupied = 0;
+  let present = 0;
+  let pastPresent = 0;
 
-  setReceiverState("CONNECTION ERROR");
+  for (
+    const record of runtime.screens.values()
+  ) {
+    if (!record.streamId) continue;
 
-  setText(
-    "connectionDetail",
-    error instanceof Error
-      ? error.message
-      : "EXIT 11 UNREACHABLE"
-  );
-}
+    occupied += 1;
 
-async function readExit11Lease() {
-  const requestUrl =
-    CONFIG.exit.leaseUrl +
-    "?t=" +
-    Date.now();
-
-  const response = await fetch(
-    requestUrl,
-    {
-      method: "GET",
-      mode: "cors",
-      cache: "no-store",
-      credentials: "omit",
-      headers: {
-        Accept: "application/json"
-      }
+    if (
+      record.liveType ===
+      "PAST_PRESENT_A_LIVE"
+    ) {
+      pastPresent += 1;
+    } else {
+      present += 1;
     }
-  );
-
-  if (!response.ok) {
-    throw new Error(
-      "Exit 11 lease returned HTTP " +
-        response.status
-    );
   }
 
-  return response.json();
+  byId("occupiedCount").textContent =
+    String(occupied);
+
+  byId("presentCount").textContent =
+    String(present);
+
+  byId(
+    "pastPresentCount"
+  ).textContent =
+    String(pastPresent);
+}
+
+function setExitState(
+  label,
+  state
+) {
+  const target =
+    byId("exitState");
+
+  target.textContent =
+    label;
+
+  target.dataset.state =
+    state;
 }
 
 async function pollExit11() {
   try {
+    const response =
+      await fetch(
+        CONFIG.exit.leaseUrl +
+          "?t=" +
+          Date.now(),
+        {
+          cache: "no-store",
+          credentials: "omit",
+          headers: {
+            Accept:
+              "application/json"
+          }
+        }
+      );
+
+    if (!response.ok) {
+      throw new Error(
+        "Exit 11 returned HTTP " +
+          response.status
+      );
+    }
+
     const lease =
-      await readExit11Lease();
-
-    receiverState.connected = true;
-
-    setText(
-      "connectionDetail",
-      "CONNECTED TO TANDIME CLOUD EXIT MANAGER"
-    );
+      await response.json();
 
     if (
       !lease ||
       lease.active !== true
     ) {
-      renderWaiting();
+      setExitState(
+        "WAITING",
+        "waiting"
+      );
+
+      if (runtime.activeCargoId) {
+        clearAllScreens();
+      }
+
+      runtime.lastLeaseIdentity =
+        null;
+
       return;
     }
 
-    renderActive(lease);
+    setExitState(
+      "ACTIVE",
+      "active"
+    );
+
+    const identity = [
+      lease.cargoId || "",
+      lease.payloadUrl || "",
+      lease.expiresAt || ""
+    ].join("|");
+
+    if (
+      identity !==
+      runtime.lastLeaseIdentity
+    ) {
+      runtime.lastLeaseIdentity =
+        identity;
+
+      await applyLease(lease);
+    }
   } catch (error) {
     console.error(
-      "TANDIME Exit 11:",
+      "TANDIME-ONUS:",
       error
     );
 
-    renderConnectionError(error);
+    setExitState(
+      "CONNECTION ERROR",
+      "connection-error"
+    );
   }
 }
 
-function startExitReceiver() {
-  clearStage();
+function showInspector(
+  definition,
+  node
+) {
+  const record =
+    runtime.screens.get(
+      definition.screenId
+    );
 
+  byId("inspectId").textContent =
+    definition.screenId;
+
+  byId("inspectGroup").textContent =
+    definition.group;
+
+  byId("inspectRegion").textContent =
+    definition.region;
+
+  byId(
+    "inspectPosition"
+  ).textContent =
+    Array.isArray(definition.corners)
+      ? definition.corners
+          .map(
+            (corner) =>
+              `${corner.x}%,${corner.y}%`
+          )
+          .join(" · ")
+      : "UNKNOWN";
+
+  byId(
+    "inspectRotation"
+  ).textContent =
+    "FOUR-CORNER PERSPECTIVE";
+
+  byId("inspectStream").textContent =
+    record &&
+    record.streamId
+      ? record.streamId
+      : "EMPTY";
+
+  byId(
+    "screenInspector"
+  ).hidden = false;
+}
+
+function start() {
+  buildScreenMap();
+  updateCounts();
   pollExit11();
 
-  receiverState.pollTimer =
+  runtime.pollTimer =
     window.setInterval(
       pollExit11,
       CONFIG.exit.pollMilliseconds
     );
 }
 
-function stopExitReceiver() {
-  if (receiverState.pollTimer) {
-    window.clearInterval(
-      receiverState.pollTimer
-    );
-
-    receiverState.pollTimer = null;
+byId(
+  "closeInspector"
+).addEventListener(
+  "click",
+  () => {
+    byId(
+      "screenInspector"
+    ).hidden = true;
   }
-
-  stopCountdown();
-}
+);
 
 window.addEventListener(
   "DOMContentLoaded",
-  startExitReceiver
+  start
 );
 
 window.addEventListener(
   "beforeunload",
-  stopExitReceiver
+  () => {
+    if (runtime.pollTimer) {
+      window.clearInterval(
+        runtime.pollTimer
+      );
+    }
+  }
 );
