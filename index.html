@@ -5,7 +5,7 @@
 
   <meta
     name="viewport"
-    content="width=device-width,initial-scale=1"
+    content="width=device-width, initial-scale=1"
   >
 
   <meta
@@ -24,9 +24,11 @@
 <body>
   <main class="onus">
     <!-- ==================================================
-         THE EYE
-         Nothing except the artwork and transported lives
-         may appear inside this frame.
+         ONUS EYE
+
+         The image contains only:
+         - the ONUS station artwork
+         - the detected live-stream panels
          ================================================== -->
 
     <section
@@ -36,6 +38,7 @@
       <img
         class="eye-artwork"
         src="./assets/onus-station.png"
+        alt="TANDIME-ONUS glass mosaic eye station"
       >
 
       <div
@@ -46,7 +49,7 @@
     </section>
 
     <!-- ==================================================
-         ALL INTERFACE ELEMENTS LIVE BELOW THE EYE
+         INTERFACE BELOW THE EYE
          ================================================== -->
 
     <section class="outside-interface">
@@ -61,7 +64,10 @@
           </h1>
         </div>
 
-        <div class="exit-mark">
+        <div
+          class="exit-mark"
+          aria-label="Cloud Exit 11"
+        >
           <span>
             CLOUD EXIT
           </span>
@@ -133,6 +139,7 @@
       <aside
         id="screenInspector"
         class="screen-inspector outside-inspector"
+        aria-label="Selected screen information"
         hidden
       >
         <button
@@ -149,34 +156,60 @@
 
         <dl>
           <div>
-            <dt>ID</dt>
-            <dd id="inspectId">—</dd>
+            <dt>
+              ID
+            </dt>
+
+            <dd id="inspectId">
+              —
+            </dd>
           </div>
 
           <div>
-            <dt>GROUP</dt>
-            <dd id="inspectGroup">—</dd>
+            <dt>
+              GROUP
+            </dt>
+
+            <dd id="inspectGroup">
+              —
+            </dd>
           </div>
 
           <div>
-            <dt>REGION</dt>
-            <dd id="inspectRegion">—</dd>
+            <dt>
+              REGION
+            </dt>
+
+            <dd id="inspectRegion">
+              —
+            </dd>
           </div>
 
           <div>
-            <dt>POSITION</dt>
-            <dd id="inspectPosition">—</dd>
+            <dt>
+              POSITION
+            </dt>
+
+            <dd id="inspectPosition">
+              —
+            </dd>
           </div>
 
           <div>
-            <dt>GEOMETRY</dt>
+            <dt>
+              GEOMETRY
+            </dt>
+
             <dd id="inspectRotation">
               FOUR-CORNER PERSPECTIVE
             </dd>
           </div>
 
           <div>
-            <dt>STREAM</dt>
+            <dt>
+              STREAM
+            </dt>
+
             <dd id="inspectStream">
               EMPTY
             </dd>
@@ -184,12 +217,15 @@
         </dl>
       </aside>
 
-      <section class="maze-explanation">
+      <section
+        class="maze-explanation"
+        aria-labelledby="mazeExplanationTitle"
+      >
         <p class="eyebrow">
           FROM THE MAZE TO THE INTERNET
         </p>
 
-        <h2>
+        <h2 id="mazeExplanationTitle">
           THE MAZE IS THE INTERNAL TANDIME TRANSPORT SPACE
         </h2>
 
@@ -217,16 +253,45 @@
           </p>
         </div>
 
-        <div class="transport-law">
-          <span>A PRESENT LIVE</span>
-          <b>→</b>
-          <span>MAZE</span>
-          <b>→</b>
-          <span>WEB11</span>
-          <b>→</b>
-          <span>EXIT 11</span>
-          <b>→</b>
-          <span>TANDIME-ONUS</span>
+        <div
+          class="transport-law"
+          aria-label="TANDIME transport route"
+        >
+          <span>
+            A PRESENT LIVE
+          </span>
+
+          <b aria-hidden="true">
+            →
+          </b>
+
+          <span>
+            MAZE
+          </span>
+
+          <b aria-hidden="true">
+            →
+          </b>
+
+          <span>
+            WEB11
+          </span>
+
+          <b aria-hidden="true">
+            →
+          </b>
+
+          <span>
+            EXIT 11
+          </span>
+
+          <b aria-hidden="true">
+            →
+          </b>
+
+          <span>
+            TANDIME-ONUS
+          </span>
         </div>
       </section>
 
