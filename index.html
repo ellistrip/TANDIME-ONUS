@@ -2,10 +2,68 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+
   <title>TANDIME-ONUS</title>
+
+  <link
+    rel="stylesheet"
+    href="./styles.css"
+  >
 </head>
+
 <body>
-  <h1>TANDIME-ONUS</h1>
+  <main class="onus-shell">
+    <header class="onus-header">
+      <p>TANDIME EXTERNAL EXIT 11</p>
+      <h1>TANDIME-ONUS</h1>
+    </header>
+
+    <section class="exit-status">
+      <div>
+        <span>EXIT STATE</span>
+        <strong id="exitState">
+          CONNECTING
+        </strong>
+      </div>
+
+      <div>
+        <span>CARGO</span>
+        <strong id="cargoId">
+          NO CARGO
+        </strong>
+      </div>
+
+      <div>
+        <span>LEASE</span>
+        <strong id="expiresAt">
+          NO ACTIVE LEASE
+        </strong>
+      </div>
+    </section>
+
+    <section class="payload-stage">
+      <img
+        id="onusPayload"
+        alt="TANDIME transported cargo"
+        hidden
+      >
+    </section>
+
+    <footer>
+      <a
+        href="https://ellistrip.com/ellistriponus.html"
+      >
+        RETURN THROUGH WEB11
+      </a>
+    </footer>
+  </main>
+
+  <script src="./config.js"></script>
+  <script src="./app.js"></script>
 </body>
 </html>
