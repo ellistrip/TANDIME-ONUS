@@ -1,19 +1,32 @@
-window.TANDIME_ONUS_CONFIG = Object.freeze({
-  application: {
-    name: "TANDIME-ONUS",
-    version: "0.1.0",
-    role: "EXTERNAL_TANDIME_EXIT"
-  },
+<section class="maze-explanation">
+  <p class="section-label">
+    FROM THE MAZE TO THE INTERNET
+  </p>
 
-  exit: {
-    number: "11",
-    leaseUrl:
-      "https://ellistrip.com/api/tandime/exits/11/lease",
-    pollMilliseconds: 3000
-  },
+  <h2>
+    THE MAZE IS THE INTERNAL TANDIME TRANSPORT SPACE
+  </h2>
 
-  returnRoute: {
-    web11:
-      "https://ellistrip.com/ellistriponus.html"
-  }
-});
+  <p>
+    A PRESENT LIVE moves through the MAZE while it is happening.
+    PAST PRESENT A LIVE returns through TANDIME and becomes a live again.
+  </p>
+
+  <p>
+    The MAZE observes the cargo without owning it.
+    WEB11 opens the external exit.
+    Exit 11 carries the cargo from ELLISTRIP to TANDIME-ONUS.
+  </p>
+
+  <div class="transport-route" aria-label="TANDIME transport route">
+    <span>A PRESENT LIVE</span>
+    <b>→</b>
+    <span>MAZE</span>
+    <b>→</b>
+    <span>WEB11</span>
+    <b>→</b>
+    <span>EXIT 11</span>
+    <b>→</b>
+    <span>TANDIME-ONUS</span>
+  </div>
+</section>
