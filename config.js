@@ -7,17 +7,18 @@ window.TANDIME_ONUS_CONFIG = Object.freeze({
     role: "EXTERNAL_LIVE_MOSAIC_DESTINATION"
   },
 
-  exit: {
-    number: "11",
+ transport: {
+  enabled: true,
+  mode: "direct-onus-feed",
 
-    leaseUrl:
-      "https://ellistrip.com/api/tandime/exits/11/lease",
+  feedUrl:
+    "https://ellistrip.com/api/tandime/onus",
 
-    payloadOrigin:
-      "https://ellistrip.com",
+  payloadOrigin:
+    "https://ellistrip.com",
 
-    pollMilliseconds: 3000
-  },
+  pollMilliseconds: 3000
+},
 
   mosaic: {
     screenCount: 165,
