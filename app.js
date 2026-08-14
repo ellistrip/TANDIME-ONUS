@@ -21,32 +21,48 @@ if (
   );
 }
 
+if (
+  !CONFIG.transport ||
+  !CONFIG.transport.feedUrl
+) {
+  throw new Error(
+    "TANDIME-ONUS direct transport missing."
+  );
+}
+
 const runtime = {
   screens: new Map(),
   streamAssignments: new Map(),
-  activeCargoId: null,
-  lastLeaseIdentity: null,
-  pollTimer: null
+  activeStreamIds: new Set(),
+  pollTimer: null,
+  hlsPlayers: new Map()
 };
 
 const byId = (id) =>
   document.getElementById(id);
 
+
+/* ============================================================
+   URL AUTHORITY
+   ============================================================ */
+
 function absolutePayloadUrl(value) {
   if (!value) return "";
 
   try {
+    const origin =
+      CONFIG.transport.payloadOrigin ||
+      "https://ellistrip.com";
+
     const url =
       new URL(
         value,
-        CONFIG.exit.payloadOrigin
+        origin
       );
 
     if (
       url.origin !==
-      new URL(
-        CONFIG.exit.payloadOrigin
-      ).origin
+      new URL(origin).origin
     ) {
       return "";
     }
@@ -56,6 +72,11 @@ function absolutePayloadUrl(value) {
     return "";
   }
 }
+
+
+/* ============================================================
+   STABLE STREAM -> EYE SCREEN ASSIGNMENT
+   ============================================================ */
 
 function stableHash(value) {
   let hash = 2166136261;
@@ -80,6 +101,7 @@ function stableHash(value) {
   return hash >>> 0;
 }
 
+
 function stableScreenForStream(streamId) {
   if (
     runtime.streamAssignments.has(
@@ -103,7 +125,7 @@ function stableScreenForStream(streamId) {
     const screen =
       EYE_MAP[
         (start + offset) %
-          EYE_MAP.length
+        EYE_MAP.length
       ];
 
     const occupied =
@@ -123,6 +145,11 @@ function stableScreenForStream(streamId) {
 
   return EYE_MAP[start].screenId;
 }
+
+
+/* ============================================================
+   BUILD THE 165 ONUS EYE SCREENS
+   ============================================================ */
 
 function createScreen(screen) {
   const node =
@@ -249,12 +276,14 @@ function createScreen(screen) {
       node,
       streamId: null,
       cargoId: null,
-      liveType: null
+      liveType: null,
+      playbackUrl: null
     }
   );
 
   return node;
 }
+
 
 function buildScreenMap() {
   const screenMap =
@@ -275,18 +304,56 @@ function buildScreenMap() {
     String(EYE_MAP.length);
 }
 
+
+/* ============================================================
+   SCREEN CLEANUP
+   ============================================================ */
+
+function destroyHlsForScreen(screenId) {
+  const hls =
+    runtime.hlsPlayers.get(screenId);
+
+  if (hls) {
+    try {
+      hls.destroy();
+    } catch {}
+
+    runtime.hlsPlayers.delete(
+      screenId
+    );
+  }
+}
+
+
 function clearScreen(screenId) {
   const record =
     runtime.screens.get(screenId);
 
   if (!record) return;
 
+  destroyHlsForScreen(screenId);
+
   record.node
     .querySelectorAll(
       "video,img,.live-marker"
     )
     .forEach(
-      (node) => node.remove()
+      (node) => {
+        if (
+          node.tagName === "VIDEO"
+        ) {
+          try {
+            node.pause();
+          } catch {}
+
+          try {
+            node.removeAttribute("src");
+            node.load();
+          } catch {}
+        }
+
+        node.remove();
+      }
     );
 
   record.node.classList.remove(
@@ -300,7 +367,9 @@ function clearScreen(screenId) {
   record.streamId = null;
   record.cargoId = null;
   record.liveType = null;
+  record.playbackUrl = null;
 }
+
 
 function clearAllScreens() {
   for (
@@ -310,10 +379,15 @@ function clearAllScreens() {
   }
 
   runtime.streamAssignments.clear();
-  runtime.activeCargoId = null;
+  runtime.activeStreamIds.clear();
 
   updateCounts();
 }
+
+
+/* ============================================================
+   LIVE MARKER
+   ============================================================ */
 
 function addLiveMarker(node) {
   const marker =
@@ -327,6 +401,105 @@ function addLiveMarker(node) {
 
   node.appendChild(marker);
 }
+
+
+/* ============================================================
+   HLS / VIDEO PLAYBACK
+   ============================================================ */
+
+function attachVideoSource(
+  video,
+  playbackUrl,
+  screenId
+) {
+  destroyHlsForScreen(screenId);
+
+  const lower =
+    String(playbackUrl || "")
+      .toLowerCase();
+
+  const isHls =
+    lower.includes(".m3u8");
+
+  if (
+    isHls &&
+    window.Hls &&
+    window.Hls.isSupported()
+  ) {
+    const hls =
+      new window.Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+        backBufferLength: 30
+      });
+
+    runtime.hlsPlayers.set(
+      screenId,
+      hls
+    );
+
+    hls.loadSource(
+      playbackUrl
+    );
+
+    hls.attachMedia(
+      video
+    );
+
+    hls.on(
+      window.Hls.Events.MANIFEST_PARSED,
+      () => {
+        video.play().catch(() => {});
+      }
+    );
+
+    hls.on(
+      window.Hls.Events.ERROR,
+      (
+        event,
+        data
+      ) => {
+        if (
+          !data ||
+          data.fatal !== true
+        ) {
+          return;
+        }
+
+        console.error(
+          "TANDIME-ONUS HLS:",
+          data
+        );
+
+        try {
+          hls.destroy();
+        } catch {}
+
+        runtime.hlsPlayers.delete(
+          screenId
+        );
+      }
+    );
+
+    return;
+  }
+
+  if (
+    isHls &&
+    video.canPlayType(
+      "application/vnd.apple.mpegurl"
+    )
+  ) {
+    video.src =
+      playbackUrl;
+
+    return;
+  }
+
+  video.src =
+    playbackUrl;
+}
+
 
 function placeVideo({
   screenId,
@@ -350,7 +523,12 @@ function placeVideo({
   video.playsInline = true;
   video.controls = false;
   video.preload = "metadata";
-  video.src = playbackUrl;
+
+  attachVideoSource(
+    video,
+    playbackUrl,
+    screenId
+  );
 
   video.addEventListener(
     "canplay",
@@ -360,7 +538,10 @@ function placeVideo({
   );
 
   record.node.prepend(video);
-  addLiveMarker(record.node);
+
+  addLiveMarker(
+    record.node
+  );
 
   record.node.classList.remove(
     "empty"
@@ -370,10 +551,23 @@ function placeVideo({
     "occupied"
   );
 
-  record.streamId = streamId;
-  record.cargoId = cargoId;
-  record.liveType = liveType;
+  record.streamId =
+    streamId;
+
+  record.cargoId =
+    cargoId;
+
+  record.liveType =
+    liveType;
+
+  record.playbackUrl =
+    playbackUrl;
 }
+
+
+/* ============================================================
+   IMAGE PAYLOAD SUPPORT
+   ============================================================ */
 
 function placeImage({
   screenId,
@@ -396,10 +590,15 @@ function placeImage({
     playbackUrl;
 
   image.alt =
-    streamId || cargoId || "Cargo";
+    streamId ||
+    cargoId ||
+    "Live";
 
   record.node.prepend(image);
-  addLiveMarker(record.node);
+
+  addLiveMarker(
+    record.node
+  );
 
   record.node.classList.remove(
     "empty"
@@ -409,10 +608,23 @@ function placeImage({
     "occupied"
   );
 
-  record.streamId = streamId;
-  record.cargoId = cargoId;
-  record.liveType = liveType;
+  record.streamId =
+    streamId;
+
+  record.cargoId =
+    cargoId;
+
+  record.liveType =
+    liveType;
+
+  record.playbackUrl =
+    playbackUrl;
 }
+
+
+/* ============================================================
+   DIRECT ONUS FEED NORMALIZATION
+   ============================================================ */
 
 function normalizedLiveType(item) {
   const source =
@@ -437,200 +649,263 @@ function normalizedLiveType(item) {
   return "A_PRESENT_LIVE";
 }
 
-function normalizeCargoPayload(
-  payload,
-  lease
-) {
-  const candidates =
-    Array.isArray(payload)
-      ? payload
-      : Array.isArray(payload.lives)
-        ? payload.lives
-        : Array.isArray(payload.items)
-          ? payload.items
-          : Array.isArray(payload.screens)
-            ? payload.screens
-            : payload.streamId ||
-                payload.playbackUrl ||
-                payload.playbackHls
-              ? [payload]
-              : [];
 
-  return candidates
-    .map((item, index) => {
-      const streamId =
-        String(
-          item.streamId ||
-          item.id ||
-          item.liveId ||
-          `${lease.cargoId}-${index}`
-        );
-
-      const rawUrl =
-        item.playbackHls ||
-        item.playbackUrl ||
-        item.url ||
-        item.src ||
-        "";
-
-      return {
-        streamId,
-        cargoId:
-          item.cargoId ||
-          lease.cargoId ||
-          "",
-        liveType:
-          normalizedLiveType(item),
-        playbackUrl:
-          absolutePayloadUrl(rawUrl),
-        payloadType:
-          String(
-            item.payloadType ||
-            item.mime ||
-            lease.payloadType ||
-            ""
-          ).toLowerCase()
-      };
-    })
-    .filter(
-      (item) =>
-        item.streamId &&
-        item.playbackUrl
-    );
-}
-
-async function readJsonPayload(
-  payloadUrl
-) {
-  const response =
-    await fetch(
-      payloadUrl +
-        (payloadUrl.includes("?")
-          ? "&"
-          : "?") +
-        "t=" +
-        Date.now(),
-      {
-        cache: "no-store",
-        credentials: "omit"
-      }
-    );
-
-  if (!response.ok) {
-    throw new Error(
-      "Cargo payload returned HTTP " +
-        response.status
-    );
+function extractFeedLives(payload) {
+  if (Array.isArray(payload)) {
+    return payload;
   }
 
-  return response.json();
+  if (
+    payload &&
+    Array.isArray(payload.lives)
+  ) {
+    return payload.lives;
+  }
+
+  if (
+    payload &&
+    Array.isArray(payload.items)
+  ) {
+    return payload.items;
+  }
+
+  if (
+    payload &&
+    Array.isArray(payload.streams)
+  ) {
+    return payload.streams;
+  }
+
+  if (
+    payload &&
+    Array.isArray(payload.screens)
+  ) {
+    return payload.screens;
+  }
+
+  if (
+    payload &&
+    payload.feed &&
+    Array.isArray(payload.feed.lives)
+  ) {
+    return payload.feed.lives;
+  }
+
+  if (
+    payload &&
+    (
+      payload.streamId ||
+      payload.liveId ||
+      payload.playbackHls ||
+      payload.playbackUrl
+    )
+  ) {
+    return [payload];
+  }
+
+  return [];
 }
 
-async function applyLease(lease) {
-  const payloadUrl =
+
+function normalizeDirectLive(
+  item,
+  index
+) {
+  const streamId =
+    String(
+      item.streamId ||
+      item.liveId ||
+      item.id ||
+      item.sessionId ||
+      `onus-live-${index}`
+    );
+
+  const rawUrl =
+    item.playbackHls ||
+    item.playbackUrl ||
+    item.hls ||
+    item.url ||
+    item.src ||
+    item.stream?.playbackHls ||
+    item.stream?.playbackUrl ||
+    "";
+
+  const playbackUrl =
     absolutePayloadUrl(
-      lease.payloadUrl
+      rawUrl
     );
-
-  if (!payloadUrl) {
-    throw new Error(
-      "Exit 11 returned an invalid payload URL."
-    );
-  }
 
   const payloadType =
     String(
-      lease.payloadType || ""
+      item.payloadType ||
+      item.mime ||
+      item.contentType ||
+      (
+        String(rawUrl)
+          .toLowerCase()
+          .includes(".m3u8")
+          ? "application/vnd.apple.mpegurl"
+          : ""
+      )
     ).toLowerCase();
 
-  runtime.activeCargoId =
-    lease.cargoId || null;
+  return {
+    streamId,
 
-  if (
-    payloadType.includes("json")
-  ) {
-    const payload =
-      await readJsonPayload(
-        payloadUrl
-      );
+    cargoId:
+      item.cargoId ||
+      item.liveId ||
+      streamId,
 
-    const lives =
-      normalizeCargoPayload(
-        payload,
-        lease
-      );
+    liveType:
+      normalizedLiveType(item),
 
-    clearAllScreens();
+    playbackUrl,
 
-    for (const live of lives) {
-      const screenId =
-        stableScreenForStream(
-          live.streamId
-        );
+    payloadType,
 
-      if (
-        live.payloadType.startsWith(
-          "image/"
+    raw:
+      item
+  };
+}
+
+
+function normalizeDirectFeed(
+  payload
+) {
+  return extractFeedLives(payload)
+    .map(
+      (item, index) =>
+        normalizeDirectLive(
+          item,
+          index
         )
-      ) {
-        placeImage({
-          ...live,
-          screenId
-        });
-      } else {
-        placeVideo({
-          ...live,
-          screenId
-        });
-      }
+    )
+    .filter(
+      (live) =>
+        live.streamId &&
+        live.playbackUrl
+    );
+}
+
+
+/* ============================================================
+   DIRECT FEED APPLICATION
+   ============================================================ */
+
+function sameScreenLive(
+  record,
+  live
+) {
+  return (
+    record &&
+    record.streamId ===
+      live.streamId &&
+    record.playbackUrl ===
+      live.playbackUrl
+  );
+}
+
+
+function removeEndedStreams(
+  activeIds
+) {
+  for (
+    const [
+      screenId,
+      record
+    ] of runtime.screens
+  ) {
+    if (
+      record.streamId &&
+      !activeIds.has(
+        record.streamId
+      )
+    ) {
+      runtime.streamAssignments.delete(
+        record.streamId
+      );
+
+      clearScreen(
+        screenId
+      );
     }
-
-    updateCounts();
-    return;
   }
+}
 
-  const screenId =
-    stableScreenForStream(
-      lease.cargoId ||
-      payloadUrl
+
+function applyDirectFeed(
+  payload
+) {
+  const lives =
+    normalizeDirectFeed(
+      payload
     );
 
-  if (
-    payloadType.startsWith(
-      "image/"
-    )
-  ) {
-    placeImage({
-      screenId,
-      streamId:
-        lease.cargoId,
-      cargoId:
-        lease.cargoId,
-      liveType:
-        "A_PRESENT_LIVE",
-      playbackUrl:
-        payloadUrl
-    });
-  } else if (
-    payloadType.startsWith(
-      "video/"
-    )
-  ) {
-    placeVideo({
-      screenId,
-      streamId:
-        lease.cargoId,
-      cargoId:
-        lease.cargoId,
-      liveType:
-        "A_PRESENT_LIVE",
-      playbackUrl:
-        payloadUrl
-    });
+  const activeIds =
+    new Set(
+      lives.map(
+        (live) =>
+          live.streamId
+      )
+    );
+
+  removeEndedStreams(
+    activeIds
+  );
+
+  for (const live of lives) {
+    const screenId =
+      stableScreenForStream(
+        live.streamId
+      );
+
+    const record =
+      runtime.screens.get(
+        screenId
+      );
+
+    if (
+      sameScreenLive(
+        record,
+        live
+      )
+    ) {
+      record.liveType =
+        live.liveType;
+
+      continue;
+    }
+
+    if (
+      live.payloadType.startsWith(
+        "image/"
+      )
+    ) {
+      placeImage({
+        ...live,
+        screenId
+      });
+    } else {
+      placeVideo({
+        ...live,
+        screenId
+      });
+    }
   }
 
+  runtime.activeStreamIds =
+    activeIds;
+
   updateCounts();
+
+  return lives.length;
 }
+
+
+/* ============================================================
+   COUNTERS / RECEIVER STATE
+   ============================================================ */
 
 function updateCounts() {
   let occupied = 0;
@@ -640,7 +915,9 @@ function updateCounts() {
   for (
     const record of runtime.screens.values()
   ) {
-    if (!record.streamId) continue;
+    if (!record.streamId) {
+      continue;
+    }
 
     occupied += 1;
 
@@ -654,17 +931,31 @@ function updateCounts() {
     }
   }
 
-  byId("occupiedCount").textContent =
-    String(occupied);
+  const occupiedNode =
+    byId("occupiedCount");
 
-  byId("presentCount").textContent =
-    String(present);
+  const presentNode =
+    byId("presentCount");
 
-  byId(
-    "pastPresentCount"
-  ).textContent =
-    String(pastPresent);
+  const pastPresentNode =
+    byId("pastPresentCount");
+
+  if (occupiedNode) {
+    occupiedNode.textContent =
+      String(occupied);
+  }
+
+  if (presentNode) {
+    presentNode.textContent =
+      String(present);
+  }
+
+  if (pastPresentNode) {
+    pastPresentNode.textContent =
+      String(pastPresent);
+  }
 }
+
 
 function setExitState(
   label,
@@ -673,6 +964,8 @@ function setExitState(
   const target =
     byId("exitState");
 
+  if (!target) return;
+
   target.textContent =
     label;
 
@@ -680,12 +973,23 @@ function setExitState(
     state;
 }
 
-async function pollExit11() {
+
+/* ============================================================
+   DIRECT /api/tandime/onus POLLING
+   ============================================================ */
+
+async function pollOnusFeed() {
   try {
+    const separator =
+      CONFIG.transport.feedUrl.includes("?")
+        ? "&"
+        : "?";
+
     const response =
       await fetch(
-        CONFIG.exit.leaseUrl +
-          "?t=" +
+        CONFIG.transport.feedUrl +
+          separator +
+          "t=" +
           Date.now(),
         {
           cache: "no-store",
@@ -699,53 +1003,39 @@ async function pollExit11() {
 
     if (!response.ok) {
       throw new Error(
-        "Exit 11 returned HTTP " +
+        "ONUS feed returned HTTP " +
           response.status
       );
     }
 
-    const lease =
+    const payload =
       await response.json();
 
-    if (
-      !lease ||
-      lease.active !== true
-    ) {
+    const liveCount =
+      applyDirectFeed(
+        payload
+      );
+
+    if (liveCount > 0) {
+      setExitState(
+        "ACTIVE",
+        "active"
+      );
+    } else {
       setExitState(
         "WAITING",
         "waiting"
       );
+    }
 
-      if (runtime.activeCargoId) {
-        clearAllScreens();
+    console.log(
+      "[TANDIME-ONUS DIRECT FEED]",
+      {
+        liveCount,
+        feed:
+          CONFIG.transport.feedUrl
       }
-
-      runtime.lastLeaseIdentity =
-        null;
-
-      return;
-    }
-
-    setExitState(
-      "ACTIVE",
-      "active"
     );
-
-    const identity = [
-      lease.cargoId || "",
-      lease.payloadUrl || "",
-      lease.expiresAt || ""
-    ].join("|");
-
-    if (
-      identity !==
-      runtime.lastLeaseIdentity
-    ) {
-      runtime.lastLeaseIdentity =
-        identity;
-
-      await applyLease(lease);
-    }
   } catch (error) {
     console.error(
       "TANDIME-ONUS:",
@@ -759,6 +1049,11 @@ async function pollExit11() {
   }
 }
 
+
+/* ============================================================
+   SCREEN INSPECTOR
+   ============================================================ */
+
 function showInspector(
   definition,
   node
@@ -768,70 +1063,130 @@ function showInspector(
       definition.screenId
     );
 
-  byId("inspectId").textContent =
-    definition.screenId;
+  const inspectId =
+    byId("inspectId");
 
-  byId("inspectGroup").textContent =
-    definition.group;
+  const inspectGroup =
+    byId("inspectGroup");
 
-  byId("inspectRegion").textContent =
-    definition.region;
+  const inspectRegion =
+    byId("inspectRegion");
 
-  byId(
-    "inspectPosition"
-  ).textContent =
-    Array.isArray(definition.corners)
-      ? definition.corners
-          .map(
-            (corner) =>
-              `${corner.x}%,${corner.y}%`
-          )
-          .join(" · ")
-      : "UNKNOWN";
+  const inspectPosition =
+    byId("inspectPosition");
 
-  byId(
-    "inspectRotation"
-  ).textContent =
-    "FOUR-CORNER PERSPECTIVE";
+  const inspectRotation =
+    byId("inspectRotation");
 
-  byId("inspectStream").textContent =
-    record &&
-    record.streamId
-      ? record.streamId
-      : "EMPTY";
+  const inspectStream =
+    byId("inspectStream");
 
-  byId(
-    "screenInspector"
-  ).hidden = false;
+  const inspector =
+    byId("screenInspector");
+
+  if (inspectId) {
+    inspectId.textContent =
+      definition.screenId;
+  }
+
+  if (inspectGroup) {
+    inspectGroup.textContent =
+      definition.group;
+  }
+
+  if (inspectRegion) {
+    inspectRegion.textContent =
+      definition.region;
+  }
+
+  if (inspectPosition) {
+    inspectPosition.textContent =
+      Array.isArray(
+        definition.corners
+      )
+        ? definition.corners
+            .map(
+              (corner) =>
+                `${corner.x}%,${corner.y}%`
+            )
+            .join(" · ")
+        : "UNKNOWN";
+  }
+
+  if (inspectRotation) {
+    inspectRotation.textContent =
+      "FOUR-CORNER PERSPECTIVE";
+  }
+
+  if (inspectStream) {
+    inspectStream.textContent =
+      record &&
+      record.streamId
+        ? record.streamId
+        : "EMPTY";
+  }
+
+  if (inspector) {
+    inspector.hidden = false;
+  }
 }
+
+
+/* ============================================================
+   START
+   ============================================================ */
 
 function start() {
   buildScreenMap();
   updateCounts();
-  pollExit11();
+
+  if (
+    CONFIG.transport.enabled !== true
+  ) {
+    setExitState(
+      "DISABLED",
+      "waiting"
+    );
+
+    return;
+  }
+
+  pollOnusFeed();
 
   runtime.pollTimer =
     window.setInterval(
-      pollExit11,
-      CONFIG.exit.pollMilliseconds
+      pollOnusFeed,
+      Number(
+        CONFIG.transport.pollMilliseconds ||
+        3000
+      )
     );
 }
 
-byId(
-  "closeInspector"
-).addEventListener(
-  "click",
-  () => {
-    byId(
-      "screenInspector"
-    ).hidden = true;
-  }
-);
+
+const closeInspector =
+  byId("closeInspector");
+
+if (closeInspector) {
+  closeInspector.addEventListener(
+    "click",
+    () => {
+      const inspector =
+        byId("screenInspector");
+
+      if (inspector) {
+        inspector.hidden = true;
+      }
+    }
+  );
+}
+
 
 window.addEventListener(
   "DOMContentLoaded",
   start
 );
+
 
 window.addEventListener(
   "beforeunload",
@@ -841,5 +1196,15 @@ window.addEventListener(
         runtime.pollTimer
       );
     }
+
+    for (
+      const hls of runtime.hlsPlayers.values()
+    ) {
+      try {
+        hls.destroy();
+      } catch {}
+    }
+
+    runtime.hlsPlayers.clear();
   }
 );
